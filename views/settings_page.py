@@ -5,11 +5,14 @@ import streamlit as st
 
 import angel
 import core
+import store
 import ui
 
 P = core.prefs()
 B = core.brokers()
-ui.page_header("Settings", "Everything is saved on this computer only.")
+ui.page_header("Settings", f"Your settings and trades are saved on {store.backend()}.")
+if store.temporary():
+    st.warning(store.TEMPORARY_NOTE, icon=":material/warning:")
 
 tab_p, tab_w, tab_l, tab_d, tab_a = st.tabs(["Profile & risk", "Watchlist", "Live updates & alerts", "Data connections", "Advanced"])
 
@@ -18,7 +21,7 @@ with tab_p:
         name = st.text_input("Your name", P.name)
         a, b = st.columns(2)
         capital = a.number_input("Trading capital (₹)", 1_000, 1_000_000_000, int(P.capital), 10_000,
-                                 help="Used to size each trade. It never leaves your computer.")
+                                 help="Used only to size each trade. Saved privately with your settings.")
         risk = b.select_slider("Risk per trade", options=[0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0], value=P.risk_pct,
                                format_func=lambda v: f"{v:g}%",
                                help="How much of your capital one losing trade may cost. 1–2% is the professional norm.")
@@ -111,6 +114,9 @@ mpin = "1234"
 totp_secret = "YOUR-TOTP-TEXT-KEY"
 ```
 4. Restart the app. The app only reads market data — it never places orders. Keep this file private.
+
+**Using the online version (Streamlit Community Cloud)?** Paste the same lines into the app's **Settings → Secrets**
+on share.streamlit.io instead of creating the file.
 """)
     st.markdown("##### Groww Trade API (paid) — live option chain")
     if B.groww:

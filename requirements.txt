@@ -1,10 +1,12 @@
-growwapi
-logzero
-numpy
-pandas
-plotly
-pyotp
-smartapi-python
-streamlit
-websocket-client
-yfinance
+# Exact versions this app was tested with (Python 3.12), so the online copy behaves like the one on your laptop.
+streamlit==1.66.1
+yfinance>=1.7,<2          # allowed to update: Yahoo changes its site now and then and yfinance follows
+pandas==2.3.3
+numpy==2.5.4
+plotly==7.1.0
+pyotp==2.10.0
+smartapi-python==1.5.5
+websocket-client==1.9.2
+logzero==1.7.0
+# Optional, only for the paid Groww Trade API. It pins an old certifi that conflicts with yfinance, so it isn't
+# installed by default — add it by hand if you use it:  pip install growwapi

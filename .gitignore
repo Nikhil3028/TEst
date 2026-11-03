@@ -6,3 +6,4 @@ profile.json
 watchlist.json
 __pycache__/
 logs/
+static/feed/

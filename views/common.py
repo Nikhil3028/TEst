@@ -1,6 +1,5 @@
 """Rendering shared by several pages: symbol search, signal card, chart, confidence badge, trade dialogs."""
 from datetime import datetime
-from urllib.parse import quote as urlquote
 
 import numpy as np
 import pandas as pd
@@ -225,6 +224,12 @@ def default_overlays(c) -> list[str]:
     return [f"EMA {P.fast}", f"EMA {P.slow}", f"EMA {P.trend}", "Supertrend"]
 
 
+def chart_live(c, P) -> dict | None:
+    """The chart's live-update settings while the market is open. Calling it again also keeps a cloud chart's
+    live file fresh (see livefeed.py), so the Chart page calls it on every refresh."""
+    return core.live_feed(ticker=c.ticker, interval=c.interval) if P.live and c.is_open else None
+
+
 def chart_html(c, S, P, height: int = CHART_H) -> str:
     """The Groww-style interactive chart for one analysed instrument."""
     df = c.df
@@ -275,16 +280,10 @@ def chart_html(c, S, P, height: int = CHART_H) -> str:
         if abs(t.target) < 1e12:
             lines.append({"price": round(t.target, 2), "color": UP, "title": "Target"})
         lines.append({"price": round(t.entry, 2), "color": ACCENT, "title": "Entry"})
-    port = core.feed_port()
-    a = core.ANGEL()
-    live = ({"url": f"/bars?ticker={urlquote(c.ticker)}&interval={c.interval}",
-             "every": 1 if a else 2,
-             "stream": f"/stream?ticker={urlquote(c.ticker)}" if a else None,
-             "ivSec": core.STEP_SECS.get(c.interval, 0), "port": port, "base": core.FEED_BASE} if P.live and c.is_open else None)
     return chart.build_html(df, symbol=c.symbol, intraday=c.intraday_tf, prev_close=c.prev_close, overlays=overlays,
                             default_overlays=default_overlays(c), panes=panes, markers=markers, price_lines=lines,
                             up=UP, down=DOWN, accent=ACCENT, bg="transparent", store_key=f"tsi-{int(c.intraday_tf)}-",
-                            height=height, live=live,
+                            height=height, live=chart_live(c, P),
                             alert={"key": c.alert_key, "verdict": S["verdict"], "title": f"{c.symbol}: {S['verdict']}",
                                    "body": S["note"]})
 

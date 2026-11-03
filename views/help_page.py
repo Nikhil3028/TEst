@@ -89,6 +89,8 @@ with tab_limits:
 - **Data:** with Angel One connected, live ticks (~1 s), the live option chain and 2 years of intraday history.
   Without it, Yahoo Finance (~10 s delay, 60 days of intraday history).
 - **Past results don't guarantee future ones.** Recent years were weaker than earlier ones for most strategies.
+- **Online version** (Streamlit Community Cloud): the chart's live price updates every 2–3 seconds instead of every
+  tick, and the app falls asleep after 12 hours without visits — open it and press the wake-up button (about a minute).
 - **Always confirm the price on Groww** before you place an order.
 - Risk 1–2% of your capital per trade, and practise with paper trades first.
 - This app is a tool for your own decisions. It is **not SEBI-registered investment advice**.

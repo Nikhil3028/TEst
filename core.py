@@ -1,7 +1,8 @@
 """The app's brain: preferences, broker connections, market data, analysis, Auto strategy selection and the
 signal for one instrument. Pages (views/*.py) only lay things out — everything they show comes from here,
 so the Home cards and the Chart page always agree."""
-import json
+import ipaddress
+import os
 import re
 import time
 from dataclasses import asdict, astuple, dataclass, field, fields
@@ -9,6 +10,7 @@ from datetime import datetime
 from html import escape
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import quote as urlquote
 
 import numpy as np
 import pandas as pd
@@ -20,10 +22,10 @@ import indicators
 import journal
 import livefeed
 import options
+import store
 import strategy
 
 HERE = Path(__file__).parent
-PROFILE_FILE = HERE / "profile.json"
 AUTO = "Auto"
 STEP_SECS = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600}
 TF_LABEL = {v[0]: k for k, v in data.INTERVALS.items()}
@@ -75,13 +77,13 @@ class Prefs:
 
 
 def _load_prefs() -> Prefs:
-    raw = {}
-    try:
-        raw = json.loads(PROFILE_FILE.read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
-        wl = journal.load_watchlist()   # migrate the old watchlist file
-        if wl != journal.DEFAULT_WATCHLIST:
-            raw["watchlist"] = wl
+    raw = store.read("profile.json", None)
+    if raw is None:
+        raw = _secrets("profile", ())            # cloud: defaults kept in the app's secrets
+        if not raw:
+            wl = journal.load_watchlist()       # migrate the old watchlist file
+            if wl != journal.DEFAULT_WATCHLIST:
+                raw["watchlist"] = wl
     known = {f.name for f in fields(Prefs)}
     return Prefs(**{k: v for k, v in raw.items() if k in known})
 
@@ -94,9 +96,7 @@ def prefs() -> Prefs:
 
 def save_prefs(p: Prefs):
     st.session_state["prefs"] = p
-    tmp = PROFILE_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(asdict(p), indent=2))
-    tmp.replace(PROFILE_FILE)
+    store.write("profile.json", asdict(p))
 
 
 def update_prefs(**kw):
@@ -127,12 +127,56 @@ def _groww(cfg_items: tuple):
     return options.connect_groww(dict(cfg_items))
 
 
-FEED_BASE = __import__("os").environ.get("FEED_BASE", "")   # e.g. "/feed" when a reverse proxy serves the live feed
+FEED_BASE = os.environ.get("FEED_BASE", "")   # e.g. "/feed" when a reverse proxy serves the live feed
+ON_CLOUD = store.ON_CLOUD
 
 
 @st.cache_resource
 def feed_port() -> int:
     return livefeed.start()
+
+
+def remote_view() -> bool:
+    """True when this page was opened through a public address (Streamlit Community Cloud, a tunnel). The live-feed
+    port is only reachable on this computer and your WiFi, so charts then poll a file the app serves itself."""
+    if (mode := os.environ.get("LIVE_FEED", "")) in ("port", "file"):   # force one way
+        return mode == "file"
+    if FEED_BASE:
+        return False
+    if ON_CLOUD:
+        return True
+    try:
+        h = st.context.headers
+        host = (h.get("X-Forwarded-Host") or h.get("Host") or "").split(",")[0].strip()
+    except Exception:  # noqa: BLE001 — not inside a browser session
+        return False
+    host = host.rsplit(":", 1)[0].strip("[]") if host.count(":") <= 1 or host.startswith("[") else host
+    if not host or host == "localhost" or host.endswith(".local"):
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return True   # a domain name: hosted or tunnelled
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local)
+
+
+def live_feed(*, ticker: str | None = None, seg: str | None = None, token: str | None = None,
+              interval: str = "15m") -> dict:
+    """Where a chart gets its live updates (see livefeed.py): pushed ticks from the feed port on this computer / WiFi,
+    or a small file refreshed every 2–3 s when opened through a public address."""
+    a = ANGEL()
+    iv_sec = STEP_SECS.get(interval, 0)
+    if remote_view():
+        every = 2 if a else 3
+        try:
+            url = (livefeed.publish_ticker(ticker, interval, every) if ticker else
+                   livefeed.publish_token(seg, token, interval, every))
+            return {"url": url, "file": True, "every": every, "ivSec": iv_sec}
+        except OSError:   # can't write next to the app: try the port anyway
+            pass
+    q = f"ticker={urlquote(ticker)}" if ticker else f"seg={seg}&token={token}"
+    return {"url": f"/bars?{q}&interval={interval}", "every": 1 if a else 2, "stream": f"/stream?{q}" if a else None,
+            "ivSec": iv_sec, "port": feed_port(), "base": FEED_BASE}
 
 
 _BROKERS: list = [0.0, None]   # (time, namespace) — reused for a few seconds; the connections themselves are cached

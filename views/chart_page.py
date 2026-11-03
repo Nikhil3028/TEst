@@ -43,6 +43,7 @@ def compute():
         st.error(f"No price data for **{sel.symbol}**. Check the symbol — use the NSE name, e.g. TATAPOWER.")
         st.stop()
     S = core.signal(c)
+    common.chart_live(c, P)   # keeps the chart's live updates flowing when opened online
 
 
 compute()

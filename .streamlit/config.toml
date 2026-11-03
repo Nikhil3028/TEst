@@ -23,3 +23,4 @@ toolbarMode = "viewer"
 
 [server]
 runOnSave = true
+enableStaticServing = true   # serves static/feed/*.json: live chart updates when the app is opened online

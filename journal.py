@@ -1,30 +1,24 @@
-"""Paper-trading journal and saved watchlist, stored as JSON next to the app."""
-import json
+"""Trades journal (paper + real) and the old watchlist file. Saved through store.py: next to the app, or in a
+private GitHub Gist when that's configured (cloud hosting)."""
 import uuid
 from datetime import datetime
-from pathlib import Path
 
+import store
 from data import IST
 
-HERE = Path(__file__).parent
-TRADES_FILE = HERE / "paper_trades.json"
-WATCHLIST_FILE = HERE / "watchlist.json"
+TRADES_FILE = "paper_trades.json"
+WATCHLIST_FILE = "watchlist.json"
 
 DEFAULT_WATCHLIST = ["NIFTY 50", "BANK NIFTY", "SENSEX", "NIFTYBEES", "RELIANCE", "HDFCBANK", "ICICIBANK", "INFY",
                      "TCS", "SBIN", "BHARTIARTL", "ITC", "LT", "AXISBANK", "TMPV", "BAJFINANCE", "MARUTI"]
 
 
-def _read(path: Path, default):
-    try:
-        return json.loads(path.read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
-        return default
+def _read(name: str, default):
+    return store.read(name, default)
 
 
-def _write(path: Path, obj):
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(obj, indent=2))
-    tmp.replace(path)
+def _write(name: str, obj):
+    store.write(name, obj)
 
 
 def load_trades() -> list[dict]:

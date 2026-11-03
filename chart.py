@@ -323,7 +323,7 @@ main.subscribeCrosshairMove(p => {
   hovering = true; header(C.bars[byTime.get(p.time)].close, p.time);
 });
 
-// ---------- live updates: poll the local feed and update the last candle in place
+// ---------- live updates: update the last candle in place from the live feed
 function setLive(ok, txt) {
   const el = document.getElementById('live');
   el.innerHTML = `<span class="d" style="background:${ok ? C.up : '#8b8f99'};${ok ? 'animation:pulse 1.6s infinite' : ''}"></span>` +
@@ -331,11 +331,12 @@ function setLive(ok, txt) {
 }
 const clock = s => { const d = new Date(s * 1000 + 19800000);
   return [d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()].map(x => String(x).padStart(2, '0')).join(':'); };
-let streaming = false, lastTickAt = 0;
+let streaming = false, lastTickAt = 0, feedFails = 0, pollTimer = null, es = null;
 function bucket(t) {  // candle start (shifted seconds) that a tick at time t belongs to
   const day = t - (t % 86400);
   if (!C.live.ivSec) return day;
-  const open = day + 9 * 3600 + 15 * 60;   // NSE session opens 09:15
+  const open = day + 9 * 3600 + 15 * 60, close = day + 15 * 3600 + 30 * 60;   // NSE session 09:15–15:30
+  t = Math.min(Math.max(t, open), close - 1);   // closing-price ticks after 15:30 belong to the last candle
   return open + Math.floor((t - open) / C.live.ivSec) * C.live.ivSec;
 }
 function applyTick(px, t) {
@@ -350,16 +351,22 @@ function applyTick(px, t) {
   candle.update(b); area.update({ time: b.time, value: b.close });
   if (!hovering) header(px, null);
 }
-// where the live feed is: a proxy path (FEED_BASE) or the same computer that serves this page, on the feed port
+// where the live feed is: a file the app serves itself (opened online, e.g. Streamlit Cloud), a proxy path
+// (FEED_BASE), or the feed port on the same computer that serves this page (this computer / your WiFi)
 function feedUrl(path) {
   if (/^https?:/.test(path)) return path;
+  if (C.live.file) {
+    let base = document.baseURI;
+    try { base = window.parent.location.href; } catch (e) {}
+    return new URL(path, base).href + '?t=' + Date.now();
+  }
   if (C.live.base) return C.live.base + path;
   let host = 'localhost', proto = 'http:';
   try { host = window.parent.location.hostname || host; proto = window.parent.location.protocol || proto; } catch (e) {}
   return `${proto}//${host}:${C.live.port}${path}`;
 }
 if (C.live && C.live.stream && window.EventSource) {
-  const es = new EventSource(feedUrl(C.live.stream));
+  es = new EventSource(feedUrl(C.live.stream));
   es.onmessage = e => { const m = JSON.parse(e.data); streaming = true; lastTickAt = Date.now();
                         window.__tickLag = Date.now() / 1000 - m.ts; window.__ticks = (window.__ticks || 0) + 1;
                         applyTick(m.ltp, m.t); setLive(true, `LIVE TICKS · ${clock(m.ts)}`); };
@@ -367,8 +374,9 @@ if (C.live && C.live.stream && window.EventSource) {
 }
 async function poll() {
   if (streaming && Date.now() - lastTickAt > 20000) streaming = false;  // stream went quiet: fall back
+  const ctl = new AbortController(), timeout = setTimeout(() => ctl.abort(), 8000);
   try {
-    const r = await fetch(feedUrl(C.live.url), { cache: 'no-store' });
+    const r = await fetch(feedUrl(C.live.url), { cache: 'no-store', signal: ctl.signal });
     const j = await r.json();
     if (!j.bars) throw new Error(j.error || 'no data');
     let changed = false;
@@ -384,10 +392,23 @@ async function poll() {
       last = C.bars[C.bars.length - 1]; changed = true;
     }
     if (changed && !hovering) header(last.close, null);
-    if (!streaming) setLive(true, `LIVE · ${clock(j.ts)}`);
-  } catch (e) { setLive(false, 'reconnecting…'); }
+    if (j.tick) applyTick(j.tick.ltp, j.tick.t);   // file feed: the newest price, fresher than the candles
+    if (C.live.file) {
+      const ts = Math.max(j.ts, j.tick ? j.tick.ts : 0), fresh = Date.now() / 1000 - ts < 90;
+      setLive(fresh, `${fresh ? 'LIVE' : 'DELAYED'} · ${clock(ts)}`);
+    } else if (!streaming) setLive(true, `LIVE · ${clock(j.ts)}`);
+    feedFails = 0;
+  } catch (e) {
+    // the feed can't be reached from here: stop asking; the page shows new prices when it reloads
+    if (++feedFails >= (C.live.file ? 6 : 3)) { clearInterval(pollTimer); if (es) es.close(); setLive(false, 'Live paused · reload'); }
+    else setLive(false, 'reconnecting…');
+  } finally { clearTimeout(timeout); }
 }
-if (C.live) { setLive(true, 'LIVE'); poll(); setInterval(poll, (C.live.stream ? 5 : C.live.every) * 1000); }
+if (C.live) {
+  setLive(true, 'LIVE');
+  setTimeout(poll, C.live.file ? 1500 : 0);   // a file feed is written a moment after the page asks for it
+  pollTimer = setInterval(poll, (C.live.stream ? 5 : C.live.every) * 1000);
+}
 else setLive(false, 'Market closed');
 
 applyIndicators(); applyPeriod();

@@ -25,7 +25,7 @@ SEL = core.selection()
 RUN_EVERY = run_every(P)
 UP_TXT, DOWN_TXT = ui.up_txt(), ui.down_txt()
 auto, is_open = P.live, core.market()[0]
-quote, live_feed_port = core.quote, core.feed_port
+quote = core.quote
 capital, risk_pct = P.capital, P.risk_pct
 _B = core.brokers()
 ANGEL, ANGEL_ERR, GROWW, GROWW_ERR = _B.angel, _B.angel_err, _B.groww, _B.groww_err
@@ -414,7 +414,6 @@ def option_chart_section():
                 f"<span style='font-size:20px;font-weight:700'>{ui.esc(name)}</span>"
                 f"{ui.pill(label if kind_sig == kind else 'No signal on this contract', UP_TXT if kind_sig == kind else MUTED)}"
                 f"<span class='note'>{ui.esc(tok[2])}</span></div>", unsafe_allow_html=True)
-    port = live_feed_port()
     html = chart.build_html(
         od, symbol=name, intraday=True, prev_close=prev_close_o,
         overlays=[{"name": "EMA 9", "col": "EMA_fast", "color": LINE_COLORS[0]},
@@ -424,10 +423,7 @@ def option_chart_section():
         panes=[{"name": "RSI", "lines": [{"col": "RSI", "color": LINE_COLORS[1]}], "levels": [70, 30]},
                {"name": "MACD", "hist": "MACD_hist", "lines": [{"col": "MACD", "color": LINE_COLORS[0]}, {"col": "MACD_signal", "color": LINE_COLORS[2]}]}],
         markers=[], price_lines=lines, up=UP, down=DOWN, accent=ACCENT, bg="transparent", store_key="tsi-opt-", height=600,
-        live={"url": f"/bars?seg={seg}&token={token}&interval={iv}", "every": 5,
-              "stream": f"/stream?seg={seg}&token={token}",
-              "ivSec": {"1m": 60, "5m": 300, "15m": 900, "1h": 3600}[iv], "port": port, "base": core.FEED_BASE}
-        if auto and is_open else None)
+        live=core.live_feed(seg=seg, token=token, interval=iv) if auto and is_open else None)
     st.iframe(html, height=605)
     st.caption("Premium chart from Angel One · live ticks while the market is open · dashed lines = entry / stop / target "
                "when the current signal points to this contract. Click a row in the chain above to chart that strike.")

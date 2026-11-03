@@ -23,7 +23,7 @@ with mid:
         st.markdown("##### Set up in 30 seconds")
         name = st.text_input("Your name (optional)", P.name, placeholder="e.g. Nikhil")
         capital = st.number_input("How much money will you trade with? (₹)", 1_000, 1_000_000_000, int(P.capital), 10_000,
-                                  help="Used only to work out how many shares to buy. It never leaves your computer.")
+                                  help="Used only to work out how many shares to buy. Saved privately with your settings.")
         risk = st.select_slider("How much are you OK losing on ONE trade, if it goes wrong?",
                                 options=[0.5, 1.0, 1.5, 2.0, 3.0], value=P.risk_pct,
                                 format_func=lambda v: f"{v:g}% of capital",

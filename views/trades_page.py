@@ -6,11 +6,14 @@ import streamlit as st
 import core
 import data
 import journal
+import store
 import ui
 from views.common import LINE_COLORS, run_every
 
 P = core.prefs()
 ui.page_header("Trades", "Paper trades to practise, real trades you placed on Groww — tracked live, closed at your stop or target.")
+if store.temporary():
+    st.warning(store.TEMPORARY_NOTE, icon=":material/warning:")
 
 kind_view = st.segmented_control("Show", ["All", "Real", "Paper"], default="All", key="trade_kind",
                                  label_visibility="collapsed") or "All"
