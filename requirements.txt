@@ -1,0 +1,10 @@
+growwapi
+logzero
+numpy
+pandas
+plotly
+pyotp
+smartapi-python
+streamlit
+websocket-client
+yfinance

@@ -1,0 +1,25 @@
+[theme]
+primaryColor = "#00b386"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap, sans-serif"
+baseRadius = "0.6rem"
+showWidgetBorder = true
+
+[theme.light]
+primaryColor = "#00b386"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f5f7"
+textColor = "#1f2328"
+borderColor = "#e3e6ea"
+
+[theme.dark]
+primaryColor = "#00b386"
+backgroundColor = "#0f1115"
+secondaryBackgroundColor = "#171a21"
+textColor = "#e8e8e6"
+borderColor = "#262a33"
+
+[client]
+toolbarMode = "viewer"
+
+[server]
+runOnSave = true
