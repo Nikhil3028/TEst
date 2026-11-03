@@ -88,7 +88,8 @@ def board():
     key = (P.style, core.candle_key(interval, P.closed_only), P.capital, P.risk_pct, P.ind, P.closed_only)
     todo = [s for s in wl if s not in b or b[s]["key"] != key]
     if todo:
-        bar = st.progress(0.0, text="Checking your watchlist…")
+        bar = st.progress(0.0, text=f"Downloading prices for {len(todo)} symbols…")
+        core.prefetch([core.data.to_yahoo(s) for s in todo], interval, P)
         for i, s in enumerate(todo):
             bar.progress(i / len(todo), text=f"Checking {s} ({i + 1} of {len(todo)}) — the first check of the day takes a moment")
             b[s] = {"key": key, **snapshot(s)}

@@ -1,6 +1,7 @@
 """Tiny local HTTP server the chart polls for the latest candles, so it can update in place
 without reloading the page.  GET /bars?ticker=^NSEI&interval=15m  ->  {"bars": [...], "ltp": ..., "ts": ...}"""
 import json
+import os
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -126,11 +127,12 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
 
-def start(port: int = 8765) -> int:
+def start(port: int = 8765, host: str | None = None) -> int:
     """Start the server in a background thread; returns the port actually used."""
     for p in range(port, port + 20):
         try:
-            srv = ThreadingHTTPServer(("127.0.0.1", p), _Handler)
+            # 0.0.0.0 so a phone on the same WiFi can reach it; set LIVEFEED_HOST=127.0.0.1 to keep it local-only
+            srv = ThreadingHTTPServer((host or os.environ.get("LIVEFEED_HOST", "0.0.0.0"), p), _Handler)
         except OSError:
             continue
         srv.daemon_threads = True  # open push streams must not keep the app alive

@@ -277,10 +277,10 @@ def chart_html(c, S, P, height: int = CHART_H) -> str:
         lines.append({"price": round(t.entry, 2), "color": ACCENT, "title": "Entry"})
     port = core.feed_port()
     a = core.ANGEL()
-    live = ({"url": f"http://localhost:{port}/bars?ticker={urlquote(c.ticker)}&interval={c.interval}",
+    live = ({"url": f"/bars?ticker={urlquote(c.ticker)}&interval={c.interval}",
              "every": 1 if a else 2,
-             "stream": f"http://localhost:{port}/stream?ticker={urlquote(c.ticker)}" if a else None,
-             "ivSec": core.STEP_SECS.get(c.interval, 0)} if P.live and c.is_open else None)
+             "stream": f"/stream?ticker={urlquote(c.ticker)}" if a else None,
+             "ivSec": core.STEP_SECS.get(c.interval, 0), "port": port, "base": core.FEED_BASE} if P.live and c.is_open else None)
     return chart.build_html(df, symbol=c.symbol, intraday=c.intraday_tf, prev_close=c.prev_close, overlays=overlays,
                             default_overlays=default_overlays(c), panes=panes, markers=markers, price_lines=lines,
                             up=UP, down=DOWN, accent=ACCENT, bg="transparent", store_key=f"tsi-{int(c.intraday_tf)}-",

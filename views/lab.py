@@ -140,7 +140,8 @@ with tab_scan:
         st.markdown("<div class='note'>Edit the watchlist in Settings. Click a row to open its chart.</div>", unsafe_allow_html=True)
         if st.button(f"Scan {len(P.watchlist)} symbols", type="primary", icon=":material/radar:"):
             rows = []
-            prog = st.progress(0.0)
+            prog = st.progress(0.0, text="Downloading prices…")
+            core.prefetch([core.data.to_yahoo(x) for x in P.watchlist], sel.interval, P, start_download=False)
             for n, name in enumerate(P.watchlist):
                 prog.progress((n + 1) / len(P.watchlist), text=f"Scanning {name}…")
                 try:

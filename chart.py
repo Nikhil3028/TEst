@@ -350,8 +350,16 @@ function applyTick(px, t) {
   candle.update(b); area.update({ time: b.time, value: b.close });
   if (!hovering) header(px, null);
 }
+// where the live feed is: a proxy path (FEED_BASE) or the same computer that serves this page, on the feed port
+function feedUrl(path) {
+  if (/^https?:/.test(path)) return path;
+  if (C.live.base) return C.live.base + path;
+  let host = 'localhost', proto = 'http:';
+  try { host = window.parent.location.hostname || host; proto = window.parent.location.protocol || proto; } catch (e) {}
+  return `${proto}//${host}:${C.live.port}${path}`;
+}
 if (C.live && C.live.stream && window.EventSource) {
-  const es = new EventSource(C.live.stream);
+  const es = new EventSource(feedUrl(C.live.stream));
   es.onmessage = e => { const m = JSON.parse(e.data); streaming = true; lastTickAt = Date.now();
                         window.__tickLag = Date.now() / 1000 - m.ts; window.__ticks = (window.__ticks || 0) + 1;
                         applyTick(m.ltp, m.t); setLive(true, `LIVE TICKS · ${clock(m.ts)}`); };
@@ -360,7 +368,7 @@ if (C.live && C.live.stream && window.EventSource) {
 async function poll() {
   if (streaming && Date.now() - lastTickAt > 20000) streaming = false;  // stream went quiet: fall back
   try {
-    const r = await fetch(C.live.url, { cache: 'no-store' });
+    const r = await fetch(feedUrl(C.live.url), { cache: 'no-store' });
     const j = await r.json();
     if (!j.bars) throw new Error(j.error || 'no data');
     let changed = false;

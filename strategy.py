@@ -143,7 +143,7 @@ def run(df: pd.DataFrame, p: Params, sig: pd.DataFrame | None = None) -> Result:
 
     def close_pos(i, price, why):
         nonlocal pos, eq
-        pos.exit_time, pos.exit, pos.reason = idx[i], price, why
+        pos.exit_time, pos.exit, pos.reason = i, price, why   # bar position; turned into a timestamp at the end
         eq *= 1 + pos.pnl_pct / 100 - cost2
         trades.append(pos)
         pos = None
@@ -159,7 +159,7 @@ def run(df: pd.DataFrame, p: Params, sig: pd.DataFrame | None = None) -> Result:
                 d = 1 if long_pos else -1
                 stop = o[i] - d * sl_atr * a[i - 1] if sl_atr else -d * inf
                 target = o[i] + d * target_atr * a[i - 1] if target_atr else d * inf
-                pos = Trade("LONG" if long_pos else "SHORT", idx[i], o[i], stop, target)
+                pos = Trade("LONG" if long_pos else "SHORT", i, o[i], stop, target)
             pending = None
 
         if pos is not None:
@@ -204,6 +204,15 @@ def run(df: pd.DataFrame, p: Params, sig: pd.DataFrame | None = None) -> Result:
         else:
             equity[i] = eq
 
+    # bar positions -> timestamps in one vectorised step (per-trade idx[i] lookups were half the run time)
+    held = trades + ([pos] if pos is not None else [])
+    if held:
+        pos_idx = np.array([t.entry_time for t in held] + [t.exit_time for t in trades], dtype=np.int64)
+        stamps = idx.take(pos_idx).tolist()
+        for t, ts in zip(held, stamps):
+            t.entry_time = ts
+        for t, ts in zip(trades, stamps[len(held):]):
+            t.exit_time = ts
     res.open_trade = pos
     res.pending = pending
     res.equity = pd.Series(equity, idx)

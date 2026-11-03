@@ -1,5 +1,6 @@
 """Options: which option to buy for the current signal, the live option chain (OI, PCR, max pain) and the
 option's own chart. Live data from Angel One when connected; otherwise a pasted Groww chain or an estimate."""
+import dataclasses
 from datetime import datetime
 
 import numpy as np
@@ -80,7 +81,7 @@ def underlying_signal():
 @st.fragment(run_every=RUN_EVERY)
 def option_tab():
     """Re-runs on its own while the market is open so premiums and OI stay live."""
-    bind(core.build(SEL, P))
+    bind(core.build(OSEL, P))
     try:
         und = options.underlying_for(symbol.upper(), ticker)
     except Exception as e:  # noqa: BLE001 — instrument list download failed
@@ -423,9 +424,10 @@ def option_chart_section():
         panes=[{"name": "RSI", "lines": [{"col": "RSI", "color": LINE_COLORS[1]}], "levels": [70, 30]},
                {"name": "MACD", "hist": "MACD_hist", "lines": [{"col": "MACD", "color": LINE_COLORS[0]}, {"col": "MACD_signal", "color": LINE_COLORS[2]}]}],
         markers=[], price_lines=lines, up=UP, down=DOWN, accent=ACCENT, bg="transparent", store_key="tsi-opt-", height=600,
-        live={"url": f"http://localhost:{port}/bars?seg={seg}&token={token}&interval={iv}", "every": 5,
-              "stream": f"http://localhost:{port}/stream?seg={seg}&token={token}",
-              "ivSec": {"1m": 60, "5m": 300, "15m": 900, "1h": 3600}[iv]} if auto and is_open else None)
+        live={"url": f"/bars?seg={seg}&token={token}&interval={iv}", "every": 5,
+              "stream": f"/stream?seg={seg}&token={token}",
+              "ivSec": {"1m": 60, "5m": 300, "15m": 900, "1h": 3600}[iv], "port": port, "base": core.FEED_BASE}
+        if auto and is_open else None)
     st.iframe(html, height=605)
     st.caption("Premium chart from Angel One · live ticks while the market is open · dashed lines = entry / stop / target "
                "when the current signal points to this contract. Click a row in the chain above to chart that strike.")
@@ -435,19 +437,22 @@ def option_chart_section():
 # ---------------------------------------------------------------- page
 ui.page_header("Options", "The option to buy for the current signal, the live option chain and the option's own chart.")
 und_all = common.options_underlyings()
-start = SEL.symbol if SEL.symbol in und_all else "NIFTY 50"
+start = SEL.symbol if SEL.symbol in und_all else "NIFTY 50"   # no options on this one -> show NIFTY, keep the Chart as is
+OSEL = dataclasses.replace(SEL, symbol=start)
 t1, t2 = st.columns([2.6, 2.4], vertical_alignment="center")
 with t1:
     picked = common.symbol_picker(start, key="opt-search", options_only=True)
 with t2:
     common.timeframe_picker(SEL, key="opt-tf")
-if picked != SEL.symbol:
+if picked != start:   # the user picked another underlying here -> the Chart page follows
     core.select(picked, exchange="NSE")
     st.rerun()
-with st.spinner(f"Analysing {SEL.symbol}…"):
-    _c = core.build(SEL, P)
+with st.spinner(f"Analysing {start}…"):
+    _c = core.build(OSEL, P)
+if SEL.symbol != start:
+    st.caption(f"{SEL.symbol} has no options, so this shows {start}. Pick another underlying above.")
 if _c is None:
-    st.error(f"No price data for {SEL.symbol}.")
+    st.error(f"No price data for {start}.")
     st.stop()
 bind(_c)
 option_tab()

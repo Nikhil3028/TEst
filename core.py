@@ -127,6 +127,9 @@ def _groww(cfg_items: tuple):
     return options.connect_groww(dict(cfg_items))
 
 
+FEED_BASE = __import__("os").environ.get("FEED_BASE", "")   # e.g. "/feed" when a reverse proxy serves the live feed
+
+
 @st.cache_resource
 def feed_port() -> int:
     return livefeed.start()
@@ -219,6 +222,27 @@ def period_for(interval: str) -> str:
 
 def load(ticker, interval, closed_only=True, start_download=True):
     return _load(ticker, interval, period_for(interval), candle_key(interval, closed_only), bool(ANGEL()), start_download)
+
+
+def prefetch(tickers: list[str], interval: str, P: "Prefs", start_download: bool = True):
+    """Download several charts' candles at once (it's network time, so 8 in parallel), filling the normal cache —
+    the Home page uses this so its first check of the day doesn't wait for one download after another."""
+    from concurrent.futures import ThreadPoolExecutor
+    from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+    ctx = get_script_run_ctx()
+
+    def one(tk):
+        import threading
+        add_script_run_ctx(threading.current_thread(), ctx)   # lets the threads use the page's cache
+        try:
+            load(tk, interval, P.closed_only, start_download)
+            if interval != "1d":
+                load_daily(tk)
+        except Exception:  # noqa: BLE001 — that symbol will show its own error later
+            pass
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        list(ex.map(one, tickers))
 
 
 def history_status(ticker, interval) -> str | None:
