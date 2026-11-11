@@ -12,7 +12,8 @@ import data
 import ui
 from views.common import run_every
 
-st.set_page_config(page_title="Trade Signals", page_icon="📈", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Trade Signals", page_icon=str(ui.ASSETS / "mark.svg"), layout="wide",
+                   initial_sidebar_state="collapsed")
 ui.inject_css()
 
 # a click somewhere (a scanner row, a chain row…) can ask for widget values to be set before widgets are drawn
@@ -28,6 +29,7 @@ PAGES = [
     st.Page("views/chart_page.py", title="Chart", icon=":material/candlestick_chart:", url_path="chart"),
     st.Page("views/options_page.py", title="Options", icon=":material/stacked_line_chart:", url_path="options"),
     st.Page("views/trades_page.py", title="Trades", icon=":material/account_balance_wallet:", url_path="trades"),
+    st.Page("views/portfolio_page.py", title="Portfolio", icon=":material/pie_chart:", url_path="portfolio"),
     st.Page("views/lab.py", title="Strategy Lab", icon=":material/science:", url_path="lab"),
     st.Page("views/settings_page.py", title="Settings", icon=":material/settings:", url_path="settings"),
     st.Page("views/help_page.py", title="Help", icon=":material/help:", url_path="help"),

@@ -17,7 +17,6 @@ from ui import ACCENT, DOWN, UP, WARN
 LINE_COLORS = ("#3987e5", "#9085e9", "#c98500")  # categorical slots 1, 7, 4
 GRADE_COLOR = {"good": "up", "warn": "warn", "bad": "down"}
 CHART_H = 640
-CONF_ICON = {"High": "🟢", "Medium": "🟡", "Low": "🟠", "Not proven": "🔴"}
 
 
 def run_every(P) -> int | None:
@@ -76,7 +75,7 @@ def strategy_controls(sel, key: str = "st"):
     if sel.strategy not in names:
         sel.strategy = core.AUTO
     sel.strategy = st.selectbox("Strategy", names, index=names.index(sel.strategy), key=f"{key}-strat-{sel.interval}",
-                                format_func=lambda n: "🤖 Auto — best tested for this chart" if n == core.AUTO else n)
+                                format_func=lambda n: "Auto — best tested for this chart" if n == core.AUTO else n)
     if sel.strategy != core.AUTO:
         s = strategy.STRATEGIES[sel.strategy]
         with st.popover("Tune strategy", icon=":material/tune:"):
@@ -104,14 +103,15 @@ def signal_card_html(c, S, P, *, countdown: str = "", compact: bool = False) -> 
     plan = ui.grid([ui.tile(lab, val, sub, ui.color(k)) for lab, val, sub, k in S["plan"]]) if S["plan"] else ""
     steps = ("<div class='steps'><div class='l'>What to do now</div><ol>"
              + "".join(f"<li>{x}</li>" for x in S["steps"]) + "</ol></div>") if S["steps"] else ""
-    head = (f"<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap'>"
-            f"<h4 style='margin:0'>Signal now</h4>{conf_badge(lvl, ckey)}</div>")
-    strat_line = ("🤖 Auto picked " if c.auto_mode else "Strategy: ") + f"<b>{ui.esc(c.strat_name)}</b>"
-    return (f"<div class='card sigpanel' style='border-color:{col}88;box-shadow:inset 4px 0 0 {col}'>{head}"
-            f"<div class='verdict' style='color:{col};margin-top:8px'>{ui.esc(S['verdict'])}</div>"
-            f"{plan}<div class='msg'>{S['msg']}</div>{steps}"
-            + (f"<div class='note' style='margin-top:10px'>⏱ {countdown}</div>" if countdown else "")
-            + f"<div class='note' style='margin-top:10px'>{strat_line} · {ui.esc(why)}</div>"
+    strat_line = ("Auto picked " if c.auto_mode else "Strategy: ") + f"<b>{ui.esc(c.strat_name)}</b>"
+    return (f"<div class='card sigpanel' style='--sig:{col}'>"
+            f"<div class='head'><h4>Signal now</h4>{conf_badge(lvl, ckey)}</div>"
+            f"<div class='verdict' style='color:{col}'>{ui.esc(S['verdict'])}</div>"
+            f"<div class='msg' style='margin-top:4px'>{S['msg']}</div>{plan}"
+            + "".join(ui.callout(x) for x in S.get("cautions", []))
+            + steps
+            + f"<div class='meta'>{strat_line} · {ui.esc(why)}"
+            + (f"<br>{countdown}" if countdown else "") + "</div>"
             + ("" if compact or not P.pro else auto_note(c)) + "</div>")
 
 
@@ -126,7 +126,7 @@ def auto_note(c) -> str:
                                                   if f["strategy"] else "nothing qualified")
         for f in a["folds"])
     span = f"{a['span'][0]:%b %Y} → {a['span'][1]:%b %Y}"
-    return (f"<div class='note' style='margin-top:10px;border-top:1px solid color-mix(in srgb, currentColor 12%, transparent);"
+    return (f"<div class='note' style='margin-top:10px;border-top:1px solid var(--line);"
             f"padding-top:8px'>Tested {a['tested']} settings on {a['bars']:,} candles ({span}); using "
             f"{ui.esc(core.setting_text(a['params'], a['strategy']))}.<br>Walk-forward (3 periods never seen): {folds}</div>")
 
@@ -137,7 +137,7 @@ def checklist_html(c) -> str:
                     True if c.daily_trend == "UP" else False if c.daily_trend == "DOWN" else None))
     if c.intraday_tf:
         rows.insert(1, (f"ADX {c.last.ADX:.0f} — {'trending' if c.last.ADX > 22 else 'choppy'}", None))
-    return "".join(ui.chip("✅" if b is True else "❌" if b is False else "➖", txt) for txt, b in rows)
+    return "".join(ui.chip("up" if b is True else "down" if b is False else "muted", txt) for txt, b in rows)
 
 
 def record_html(c) -> str:
@@ -150,6 +150,37 @@ def record_html(c) -> str:
     return (f"Over {span} this strategy made <b style='color:{ui.signed_color(ret)}'>{ret:+.1f}%</b> in {bt['Trades']} trades "
             f"(won {bt['Win rate %']:.0f}% of them; average win {bt['Avg win %']:+.1f}%, average loss {bt['Avg loss %']:+.1f}%). "
             f"Simply holding would have made {bh:+.1f}%. Worst fall along the way: {bt['Max drawdown %']:.0f}%.")
+
+
+def _ago(h: float) -> str:
+    return "just now" if h < 1 else f"{h:.0f}h ago" if h < 24 else f"{h / 24:.0f}d ago"
+
+
+def news_html(c) -> str:
+    """This week's headlines with their good / bad reading and the next results date."""
+    nw = c.news
+    if not nw:
+        return "<div class='msg muted'>News couldn't be loaded just now.</div>"
+    se, ev = nw["sentiment"], nw["events"]
+    tiles = [ui.tile("News this week", se["label"], se["text"], ui.color(se["key"]))]
+    if "results" in ev:
+        n = ev["results_in"]
+        tiles.append(ui.tile("Next results", f"{ev['results']:%d %b %Y}", "today" if n == 0 else f"in {n} day{'s' * (n != 1)}",
+                             ui.color("warn") if n <= 5 else None))
+    if "ex_dividend" in ev:
+        tiles.append(ui.tile("Ex-dividend date", f"{ev['ex_dividend']:%d %b %Y}", f"in {ev['ex_dividend_in']} days"))
+    rows = []
+    for h in nw["items"]:
+        dot = ui.color("up") if h["score"] > 0 else ui.color("down") if h["score"] < 0 else "var(--line2)"
+        link = h["link"] if h["link"].startswith("https://") else "#"
+        rows.append(f"<div class='newsrow'><span class='dot' style='background:{dot};flex:none'></span><div>"
+                    f"<a href='{ui.esc(link)}' target='_blank' rel='noopener noreferrer'>{ui.esc(h['title'])}</a>"
+                    f"<div class='src'>{ui.esc(h['source'])} · {_ago(h['age_h'])}</div></div></div>")
+    body = "".join(rows) or "<div class='msg muted'>No headlines about this one in the last 7 days.</div>"
+    return (ui.grid(tiles) + f"<div style='margin-top:12px'>{body}</div>"
+            "<div class='note' style='margin-top:10px;border-top:1px solid var(--line);padding-top:10px'>Green dot = reads as "
+            "good news, red = bad, grey = neither — judged from the words in the headline, so it can be wrong. News is context: "
+            "unlike the signal, it could not be tested on past years, so it never changes BUY / SELL by itself.</div>")
 
 
 # ---------------------------------------------------------------- trade actions

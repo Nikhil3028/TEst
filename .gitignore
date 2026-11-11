@@ -7,3 +7,5 @@ watchlist.json
 __pycache__/
 logs/
 static/feed/
+news_archive/
+portfolio.json

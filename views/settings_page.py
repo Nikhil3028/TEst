@@ -41,6 +41,16 @@ with tab_p:
             st.rerun()
 
 with tab_w:
+    import scanner
+    opts = [scanner.OFF] + list(scanner.UNIVERSES)
+    scan = st.selectbox("Scan the market for the best setups (Home page)", opts,
+                        index=opts.index(P.scan) if P.scan in opts else 0,
+                        help="Besides your watchlist, the app checks every stock of this index once a day and shows the ones "
+                             "with a fresh or nearby BUY and a tested record. NIFTY 100 takes about 5 minutes the first time "
+                             "each day, NIFTY 200 about 10 — it runs in the background.")
+    if scan != P.scan:
+        core.update_prefs(scan=scan)
+        st.rerun()
     u = core.universe()
     label_of = dict(zip(u.symbol, u.label))
     sym_of = dict(zip(u.label, u.symbol))
@@ -69,8 +79,21 @@ with tab_l:
                                format_func=lambda s: f"{s} seconds", disabled=not live)
     closed = st.toggle("Decide signals only on completed candles (recommended)", P.closed_only,
                        help="Stops signals that appear and then vanish halfway through a candle.")
-    if (live, refresh, closed) != (P.live, P.refresh, P.closed_only):
-        core.update_prefs(live=live, refresh=refresh, closed_only=closed)
+    news_on = st.toggle("Show news and results dates next to signals", P.news,
+                        help="This week's headlines (Google News) and the next results date (Yahoo Finance). "
+                             "Shown as context and warnings — they never change a signal.")
+    import news_archive
+    if not news_archive.enabled():
+        st.caption("News archive: off online — headlines are collected by the copy of the app on your computer.")
+    elif (na := news_archive.stats())["count"]:
+        st.caption(f"News archive: {na['count']:,} headlines for {na['symbols']} symbols, collected on {na['days']} "
+                   f"day{'s' * (na['days'] != 1)} since {na['since']:%d %b %Y}. Saved in the news_archive folder so news "
+                   "can be tested against prices once about a year has built up. Open the app at least once a week to "
+                   "miss nothing.")
+    else:
+        st.caption("News archive: starts collecting the first time news is shown.")
+    if (live, refresh, closed, news_on) != (P.live, P.refresh, P.closed_only, P.news):
+        core.update_prefs(live=live, refresh=refresh, closed_only=closed, news=news_on)
         st.rerun()
     st.markdown("##### Alerts")
     st.markdown("""

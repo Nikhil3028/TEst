@@ -396,9 +396,9 @@ def reliability(res: Result, df: pd.DataFrame, cost_pct: float, p: Params, sig: 
     both_ok = len(halves) == 2 and all(v > 0 for v in halves.values())
     pf = s["Profit factor"]
     if s["Trades"] < 8:
-        return "⚠️ Too few past trades to judge", "warn", halves
+        return "Too few past trades to judge", "warn", halves
     if s["Strategy return %"] > 0 and pf >= 1.3 and both_ok:
-        return "✅ Has worked well on this chart", "good", halves
+        return "Has worked well on this chart", "good", halves
     if s["Strategy return %"] > 0 and pf >= 1.05:
-        return "⚠️ Weak / inconsistent edge here", "warn", halves
-    return "❌ Has NOT worked on this chart — avoid", "bad", halves
+        return "Weak / inconsistent edge here", "warn", halves
+    return "Has NOT worked on this chart — avoid", "bad", halves

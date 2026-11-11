@@ -64,18 +64,20 @@ def header():
     style = "Swing · daily candles" if c.interval == "1d" else f"Intraday · {core.TF_SHORT[c.interval]} candles"
     src = c.source + (" · live ticks" if core.ANGEL() and c.is_open else "")
     st.markdown(
-        f"<div class='hero2'><div class='hl'><div class='sym'>{ui.esc(c.symbol)}</div>"
+        f"<div class='hero'><div class='id'><div class='sym'>{ui.esc(c.symbol)}</div>"
         f"<div class='sub'>{ui.esc(name if name != c.symbol else '')}{' · ' if name != c.symbol else ''}{style} · {ui.esc(src)}</div>"
         f"<div class='pills'>{ui.pill(trend_word, trend_col)}{common.conf_badge(lvl, ckey)}</div></div>"
-        f"<div class='hr'>" + ui.grid([
-            ui.tile("Price", f"₹{c.ltp:,.2f}", f"<span style='color:{ui.signed_color(c.chg)}'>{c.chg:+,.2f} ({c.chg_pct:+.2f}%)</span>"),
-            f"<div class='tile'>{ui.range_bar(day_lo, day_hi, c.ltp)}</div>",
-            ui.tile("Open · Prev close", f"₹{float(c.raw['Open'][today].iloc[0]):,.0f}", f"prev ₹{c.prev_close:,.2f}"),
-            ui.tile("Typical move" if not P.pro else "ATR", f"₹{c.last.ATR:,.2f}", f"{float(c.last.ATR) / c.ltp * 100:.2f}% per candle"),
-            ui.tile("Volume", f"{vol / 1e5:,.1f} L" if vol else "—", "today" if vol else "n/a for indices"),
-        ]) + "</div></div>", unsafe_allow_html=True)
+        f"<div class='quote'><div class='price'>₹{c.ltp:,.2f}</div>"
+        f"<div class='chg' style='color:{ui.signed_color(c.chg)}'>{c.chg:+,.2f} ({c.chg_pct:+.2f}%) <span class='muted' "
+        f"style='font-weight:500'>today</span></div></div>"
+        f"<div class='facts'>"
+        f"<div class='tile'>{ui.range_bar(day_lo, day_hi, c.ltp)}</div>"
+        + ui.tile("Open", f"{float(c.raw['Open'][today].iloc[0]):,.2f}", f"prev close {c.prev_close:,.2f}")
+        + ui.tile("Typical move" if not P.pro else "ATR", f"{c.last.ATR:,.2f}", f"{float(c.last.ATR) / c.ltp * 100:.2f}% per candle")
+        + ui.tile("Volume", f"{vol / 1e5:,.1f} L" if vol else "—", "today" if vol else "n/a for indices")
+        + "</div></div>", unsafe_allow_html=True)
     if (hs := core.history_status(c.ticker, c.interval)):
-        st.caption(f"⏳ Getting 2 years of {c.interval} history from Angel One ({hs}) — using Yahoo's 60 days until it's ready.")
+        st.caption(f"Getting 2 years of {c.interval} history from Angel One ({hs}) — using Yahoo's 60 days until it's ready.")
 
 
 header()
@@ -86,12 +88,17 @@ header()
 def signal_section():
     compute()
     st.markdown(common.signal_card_html(c, S, P, countdown=core.candle_countdown(c)), unsafe_allow_html=True)
-    b1, b2 = st.columns(2)
-    with b1:
-        common.paper_button(c, S)
-    with b2:
-        if S["kind"] in ("BUY", "SHORT", "HOLD"):
+    can_buy = S["kind"] in ("BUY", "SHORT", "HOLD")
+    if S["can_paper"] and can_buy:
+        b1, b2 = st.columns(2)
+        with b1:
+            common.paper_button(c, S)
+        with b2:
             common.bought_button(c, S)
+    elif can_buy:
+        common.bought_button(c, S)
+    else:
+        common.paper_button(c, S)
     if options.underlying_for(c.symbol, c.ticker) and S["kind"] in ("BUY", "SHORT", "HOLD"):
         if st.button(f"See the option to buy for {c.symbol}", icon=":material/stacked_line_chart:", width="stretch", type="tertiary"):
             st.switch_page("views/options_page.py")
@@ -124,4 +131,9 @@ with col_sig:   # first, so the chart knows the current signal for alerts
 with col_chart:
     st.iframe(common.chart_html(c, S, P), height=CHART_H + 5)
     st.caption("Hover for the price at any time · scroll to zoom, drag to pan · ▲ BUY / ▼ SHORT = past signals, "
-               "● = exits with their result · 🔔 (top right of the chart) turns on desktop alerts.")
+               "● = exits with their result · the bell at the top right of the chart turns on desktop alerts.")
+    if P.news:
+        tag = core.news_tag(c.news)
+        with st.expander("News & events" + (f" — {tag[0]}" if tag else ""), expanded=bool(c.news and c.news["items"]),
+                         icon=":material/newspaper:"):
+            st.markdown(common.news_html(c), unsafe_allow_html=True)

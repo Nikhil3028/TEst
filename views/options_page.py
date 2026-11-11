@@ -133,7 +133,7 @@ def option_tab():
         st.error(f"Couldn't get the option chain: {e}")
 
     if expiry == datetime.now(data.IST).date().isoformat():
-        st.warning("⚠️ **Expiry day.** Premiums of this expiry lose value very fast (especially after 1 PM) and can go to zero. "
+        st.warning("**Expiry day.** Premiums of this expiry lose value very fast (especially after 1 PM) and can go to zero. "
                    "Beginners should trade the next expiry.")
 
     if chain is None or chain.table.empty:
@@ -160,9 +160,9 @@ def option_tab():
                        f"{'buy a CALL (profits if it rises)' if kind == 'CE' else 'buy a PUT (profits if it falls)'}.")
                 bd = an.get("bias_dir", 0)
                 if bd and bd != (1 if kind == "CE" else -1):
-                    msg += f"<br>⚠️ Option-chain OI disagrees: <b>{an['bias']}</b> (PCR {an['pcr']:.2f}). Consider skipping or half size."
+                    msg += f"<br><b style='color:var(--warn)'>Caution:</b> option-chain OI disagrees: <b>{an['bias']}</b> (PCR {an['pcr']:.2f}). Consider skipping or half size."
                 elif bd:
-                    msg += f"<br>✅ OI agrees: {an['bias']} (PCR {an['pcr']:.2f})."
+                    msg += f"<br>OI agrees: {an['bias']} (PCR {an['pcr']:.2f})."
             if pl and grade_key != "bad":
                 buy_now = label in ("BUY", "SELL")
                 if buy_now and pl["lots"] == 0:
@@ -196,7 +196,7 @@ def option_tab():
                          ui.tile("Quantity", lots_txt, f"{pl['qty']:,} qty · ₹{pl['cost']:,.0f}")]
                 one_lot_risk = (pl["premium"] - pl["stop"]) * lot
                 if pl["lots"] == 0:
-                    msg += (f"<br>⚠️ Even 1 lot risks <b>₹{one_lot_risk:,.0f}</b> ({one_lot_risk / capital * 100:.1f}% of your capital, "
+                    msg += (f"<br><b style='color:var(--warn)'>Caution:</b> even 1 lot risks <b>₹{one_lot_risk:,.0f}</b> ({one_lot_risk / capital * 100:.1f}% of your capital, "
                             f"needs ₹{pl['premium'] * lot:,.0f}) — above your {risk_pct}% risk limit. Skip, or raise capital/risk knowingly.")
                 else:
                     tiles.append(ui.tile("Max loss", f"₹{pl['max_loss']:,.0f}", f"{pl['max_loss'] / capital * 100:.1f}% of capital"))
@@ -214,10 +214,10 @@ def option_tab():
                 r0 = row.iloc[0]
                 tiles = [ui.tile(f"{an['atm']:g} CE", f"₹{r0.ce_ltp:,.2f}" if pd.notna(r0.ce_ltp) else "—", "at-the-money call"),
                          ui.tile(f"{an['atm']:g} PE", f"₹{r0.pe_ltp:,.2f}" if pd.notna(r0.pe_ltp) else "—", "at-the-money put")]
-        st.markdown(f"<div class='card' style='border-color:{color}88;box-shadow:inset 4px 0 0 {color};margin-top:6px'>"
-                    f"<h4>Option signal · {ui.esc(live_note)}</h4><div class='verdict' style='color:{color};font-size:30px'>{ui.esc(verdict)}</div>"
+        st.markdown(f"<div class='card sigpanel' style='margin-top:6px;--sig:{color}'>"
+                    f"<h4>Option signal · {ui.esc(live_note)}</h4><div class='verdict' style='color:{color};font-size:28px'>{ui.esc(verdict)}</div>"
                     f"{ui.grid(tiles) if tiles else ''}<div class='msg'>{msg}</div></div>", unsafe_allow_html=True)
-        if paper_opt and st.button(f"📝 Paper-trade {paper_opt['name']} ({paper_opt['qty']:,} qty @ ₹{paper_opt['entry']:,.2f})",
+        if paper_opt and st.button(f"Paper-trade {paper_opt['name']} ({paper_opt['qty']:,} qty @ ₹{paper_opt['entry']:,.2f})",
                                    type="primary", key=f"ppt-{paper_opt['ticker']}"):
             journal.add_trade(paper_opt["name"], paper_opt["ticker"], "LONG", paper_opt["qty"], paper_opt["entry"],
                               paper_opt["stop"], paper_opt["target"], f"{strat_name} (option)")
@@ -292,7 +292,7 @@ def option_tab():
             st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
 
     # ---- data sources
-    with st.expander("📋 Paste an option chain from the Groww page (via the Claude browser extension)"):
+    with st.expander("Paste an option chain from the Groww page (via the Claude browser extension)"):
         st.markdown("Open the option chain on Groww, run the extraction prompt in the Claude extension, then paste its CSV here.")
         txt = st.text_area("Option chain CSV", pasted_text, height=180, key="paste_box",
                            placeholder="#underlying=NIFTY,spot=23610,expiry=2026-11-09,captured_at=...\nstrike,ce_ltp,...")
@@ -309,7 +309,7 @@ def option_tab():
                 st.rerun()
             except Exception as e:  # noqa: BLE001
                 st.error(f"Couldn't read that CSV: {e}")
-    with st.expander("🔌 Connect Angel One (free) for live ticks & option chain" + (" — ✅ connected" if ANGEL else "")):
+    with st.expander("Connect Angel One (free) for live ticks & option chain" + (" — connected" if ANGEL else "")):
         if ANGEL_ERR:
             st.error(f"Angel One login failed: {ANGEL_ERR}")
         if ANGEL and ANGEL.last_error:
@@ -325,7 +325,7 @@ totp_secret = "YOUR-TOTP-TEXT-KEY"
 ```
 then restart the app. Used for market data only — the app never places orders. Keep this file private.
 """)
-    with st.expander("🔌 Connect the Groww API for live option prices" + (" — ✅ connected" if GROWW else "")):
+    with st.expander("Connect the Groww API for live option prices" + (" — connected" if GROWW else "")):
         if GROWW_ERR:
             st.error(f"Groww login failed: {GROWW_ERR}")
         st.markdown(f"""
@@ -356,9 +356,9 @@ def option_chart_section():
     if not und:
         return
     u, exch = und
-    st.markdown("#### 📈 Option chart")
+    st.markdown("#### Option chart")
     if not ANGEL:
-        st.info("Option charts need live data — connect Angel One (see the 🔌 section above).")
+        st.info("Option charts need live data — connect Angel One (see the connection section above).")
         return
     exps = options.expiries(u, exch)
     expiry = st.session_state.get(f"exp-{u}-{SWING_DAYS}") or exps[options.default_expiry(exps, SWING_DAYS)]

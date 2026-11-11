@@ -17,6 +17,7 @@ trade). First time on a new machine: `python3 -m venv .venv && .venv/bin/pip ins
 | **Chart** | One stock / index: live chart, the signal, *What to do now*, confidence, why — plus Paper-trade / I bought this |
 | **Options** | The option to buy for the signal, live option chain (OI, PCR, max pain), the option's own chart |
 | **Trades** | Paper and real trades with live P&L; stops and targets close them automatically |
+| **Portfolio** | The momentum portfolio: the strongest 10 or 20 stocks, re-picked monthly, with its backtest and limits |
 | **Strategy Lab** | Backtests, walk-forward results, strategy comparison, watchlist scan |
 | **Settings** | Profile & risk, watchlist, live updates & alerts, data connections, advanced |
 | **Help** | Quick start, glossary, what the testing found, limitations |
@@ -30,13 +31,18 @@ Light / dark theme: ⋮ menu → Settings → Choose app theme.
 - `strategy.py` – strategies, backtest engine, reliability grading
 - `indicators.py` – EMA, RSI, MACD, ATR, Bollinger, VWAP, Supertrend, ADX, opening range
 - `data.py` – Yahoo Finance data, market hours (IST)
+- `momentum.py` – the momentum portfolio: ranking, monthly orders, saved holdings (`portfolio.json`) and its backtest
+- `scanner.py` – daily background scan of NIFTY 50 / 100 / 200 for the best-tested fresh setups (Home → Best setups today)
+- `news_archive.py` – saves every headline seen to `news_archive/` (per month), so news can be backtested later; run it by itself to collect on a schedule
+- `news.py` – this week's headlines (Google News) with a good / bad reading, results dates — context, not part of the signal
 - `angel.py` – Angel One SmartAPI: login, tick stream, option chain, 2-year intraday history cache
 - `options.py` – contracts, expiries, lot sizes, option chains, OI analytics, option trade plans
 - `chart.py` – Groww-style chart (TradingView Lightweight Charts), live ticks, desktop alerts, light/dark aware
 - `livefeed.py` – live chart updates: its own port on this computer / WiFi, a file Streamlit serves when online
 - `journal.py` – trades journal (`paper_trades.json`)
 - `store.py` – where settings and trades are saved: files here, or a private GitHub Gist when online
-- `ui.py` – design system (theme-aware components)
+- `ui.py` – design system: colour tokens for light / dark, the CSS, and the HTML components (ticker, tiles, cards, signal panel)
+- `assets/` – logo and app icon
 
 Your settings live in `profile.json`; broker keys in `.streamlit/secrets.toml` — never share or commit either.
 

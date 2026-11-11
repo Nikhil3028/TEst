@@ -57,12 +57,12 @@ TEMPLATE = r"""<!doctype html><html><head><meta charset="utf-8">
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   * { box-sizing: border-box; }
-  :root { --fg:#e8e8e6; --muted:#8b8f99; --btn:#b8bcc6; --hover:#1b1f27; --hover-fg:#fff; --line:#262a33;
-          --menu:#171a21; --menu-line:#2b303a; --menu-fg:#d6d8de; --pane:#20242c; }
-  :root.light { --fg:#1f2328; --muted:#6b7280; --btn:#4b5563; --hover:#eef0f3; --hover-fg:#111; --line:#e3e6ea;
-          --menu:#ffffff; --menu-line:#e3e6ea; --menu-fg:#1f2328; --pane:#eceef1; }
+  :root { --fg:#e7e9ee; --muted:#8a90a0; --btn:#b4b9c6; --hover:#181c24; --hover-fg:#fff; --line:#232834;
+          --menu:#12151b; --menu-line:#2e3442; --menu-fg:#d6d9e0; --pane:#181c24; }
+  :root.light { --fg:#141821; --muted:#626a7a; --btn:#4b5363; --hover:#f0f2f5; --hover-fg:#111; --line:#e3e6eb;
+          --menu:#ffffff; --menu-line:#e3e6eb; --menu-fg:#141821; --pane:#f0f2f5; }
   html, body { margin:0; padding:0; background: transparent; color:var(--fg); height:__H__px; overflow:hidden;
-    font-family: "Source Sans Pro", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    font-family: Inter, "Source Sans Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   #wrap { display:flex; flex-direction:column; height:100%; }
   #head { display:flex; justify-content:space-between; align-items:flex-end; padding:2px 4px 8px; gap:12px; flex-wrap:wrap; }
   #px { font-size:28px; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:-.01em; }

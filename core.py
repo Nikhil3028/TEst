@@ -21,6 +21,8 @@ import data
 import indicators
 import journal
 import livefeed
+import news
+import news_archive
 import options
 import store
 import strategy
@@ -66,6 +68,8 @@ class Prefs:
     st_p: int = 10
     st_m: float = 3.0
     onboarded: bool = False
+    news: bool = True               # headlines + results dates next to the signal
+    scan: str = "NIFTY 100"         # index scanned for the day's best setups (Home): Off | NIFTY 50 | NIFTY 100 | NIFTY 200
 
     @property
     def ind(self) -> tuple:
@@ -304,6 +308,41 @@ def load_daily(ticker):
     return data.fetch(ticker, "1d", "2y")
 
 
+@st.cache_data(ttl=30 * 60, max_entries=200, show_spinner=False)
+def _news(symbol, ticker, name, day):
+    r = news.read(symbol, ticker, name)
+    try:   # keep every headline seen, so news can be tested against prices once enough has built up
+        news_archive.save(symbol, r.pop("more", []))
+    except Exception:  # noqa: BLE001 — the archive must never break the page
+        pass
+    return r
+
+
+def news_for(symbol: str, ticker: str) -> dict | None:
+    """Headlines, their good / bad reading, results dates and cautions for one instrument (refreshed every 30 min).
+    None when it can't be fetched — news is extra context, never needed for a signal."""
+    try:
+        return _news(symbol.upper(), ticker, name_of(symbol), datetime.now(data.IST).strftime("%Y-%m-%d"))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def prefetch_news(symbols: list[str]):
+    """Fetch the news of several symbols at once (Home page), filling the cache."""
+    from concurrent.futures import ThreadPoolExecutor
+    from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+    ctx = get_script_run_ctx()
+    universe()   # load the name list once, before the threads ask for it
+
+    def one(sym):
+        import threading
+        add_script_run_ctx(threading.current_thread(), ctx)
+        news_for(sym, data.to_yahoo(sym))
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        list(ex.map(one, symbols))
+
+
 def quote(ticker):
     """(last price, % change vs previous close) or None — live ticks from Angel One when connected."""
     a = ANGEL()
@@ -358,7 +397,7 @@ def analyse(ticker, interval, strat, params, P: Prefs, start_download=True):
         sig = strat.signals(df, params)
         out = (df, live, raw, strategy.run(df, params, sig), sig, uv, daily)
     if len(store) > 96:
-        store.pop(next(iter(store)))
+        store.pop(next(iter(store)), None)   # the market scan fills this store from its own thread too
     store[key] = out
     return out
 
@@ -368,7 +407,10 @@ def signal_of(r) -> str:
 
 
 # ---------------------------------------------------------------- Auto: pick the best strategy for this chart
-STOPS = [dict(sl_atr=0, trail_supertrend=False), dict(sl_atr=3.0, trail_supertrend=False), dict(sl_atr=0, trail_supertrend=True)]
+SWING_TARGET = 3.0   # ATRs. The swing trend strategies book profit here and re-enter while the trend holds — tested: with a
+#                      target the unseen-years result was ~6-7%/yr (median, 28 instruments) against ~4%/yr waiting for the SELL signal
+STOPS = [dict(sl_atr=0, trail_supertrend=False, target_atr=SWING_TARGET), dict(sl_atr=3.0, trail_supertrend=False, target_atr=SWING_TARGET),
+         dict(sl_atr=0, trail_supertrend=True, target_atr=SWING_TARGET)]
 SIGNAL_KEYS = ("buy_score", "ma_len", "band", "exit_band", "fast_len", "slow_len", "lookback", "entry_len", "exit_len",
                "trend_filter")   # settings that change the entry/exit signals (the rest are stops)
 
@@ -377,7 +419,7 @@ def param_grid(s):
     """Settings Auto tries for one strategy (small on purpose: more choices = more chance of a lucky pick)."""
     if s.signals is strategy.trend_buffer_signals:
         sym = [dict(ma_len=n, band=b, exit_band=b, **st_) for n in (100, 150, 200) for b in (0.0, 0.01, 0.02, 0.03) for st_ in STOPS]
-        deep = [dict(ma_len=n, band=0.0, exit_band=x, sl_atr=0, trail_supertrend=False)
+        deep = [dict(ma_len=n, band=0.0, exit_band=x, sl_atr=0, trail_supertrend=False, target_atr=SWING_TARGET)
                 for n in (100, 150, 200) for x in (0.05, 0.08, 0.10, 0.15)]
         return sym + deep
     if s.signals is strategy.golden_cross_signals:
@@ -393,11 +435,11 @@ def param_grid(s):
     if s.signals is strategy.score_signals:
         return [dict(sl_atr=a, target_atr=b, trail_supertrend=c, buy_score=d)
                 for a in (1.0, 1.5, 2.0) for b in (0, 3) for c in (False, True) for d in (3, 4, 5)]
-    return [dict(sl_atr=a, target_atr=0, trail_supertrend=c, buy_score=4) for a in (0, 2.0, 3.0) for c in (False, True)]
+    return [dict(sl_atr=a, target_atr=SWING_TARGET, trail_supertrend=c, buy_score=4) for a in (0, 2.0, 3.0) for c in (False, True)]
 
 
 FOLDS = (0.5, 0.65, 0.8, 1.0)  # walk-forward: choose on [0, a), test on [a, b) for each consecutive pair
-LIB_VERSION = 2   # bump when strategies or grids change, so Auto's daily disk cache is rebuilt
+LIB_VERSION = 4   # bump when strategies or grids change, so Auto's daily disk cache is rebuilt
 
 
 def _summary(pnls: list[float]) -> dict:
@@ -632,10 +674,16 @@ def build(sel: Sel, P: Prefs, start_download: bool = True) -> SimpleNamespace | 
         today=today, prev_close=prev_close, chg=ltp - prev_close, chg_pct=(ltp / prev_close - 1) * 100,
         grade=grade, grade_key=grade_key, halves=halves, bt=bt, daily_trend=daily_trend,
         alert_key=f"{ticker}-{interval}-{strat.name}", capital=P.capital, risk_pct=P.risk_pct,
-        source=raw.attrs.get("source", "Yahoo Finance"))
+        source=raw.attrs.get("source", "Yahoo Finance"),
+        news=news_for(sel.symbol, ticker) if P.news else None)
 
 
 # ---------------------------------------------------------------- the signal, in plain words
+def when(ts, c) -> str:
+    """Trade time for text: the date (with year) on daily charts, date + time on intraday ones."""
+    return f"{ts:%d %b %Y}" if not c.intraday_tf else f"{ts:%d %b %H:%M}"
+
+
 def qty_for(c, entry, stop) -> int:
     risk_per_share = abs(entry - stop)
     if risk_per_share <= 0:
@@ -785,25 +833,29 @@ def signal(c) -> dict:
         steps = []
         if d == 1 and index:
             etf = INDEX_ETF.get(c.symbol)
-            steps.append(f"{sym} itself can't be bought — <b>BUY the option {escape(opt or '')}</b> (see 🎯 Options)"
+            steps.append(f"{sym} itself can't be bought — <b>BUY the option {escape(opt or '')}</b> (see Options)"
                          + (f" or the ETF <b>{etf}</b>" if etf else "") + ".")
         elif d == 1:
             steps.append(f"<b>BUY {sym}</b> now at about <b>₹{ltp:,.2f}</b> — <b>{q:,} qty</b>"
-                         + (f", or the option <b>{escape(opt)}</b> (see 🎯 Options)" if opt else "") + ".")
+                         + (f", or the option <b>{escape(opt)}</b> (see Options)" if opt else "") + ".")
         elif index:
-            steps.append(f"<b>BUY the put option {escape(opt or '')}</b> — it gains when {sym} falls (see 🎯 Options). "
+            steps.append(f"<b>BUY the put option {escape(opt or '')}</b> — it gains when {sym} falls (see Options). "
                          "An index can't be shorted directly.")
         else:
             steps.append((f"<b>BUY {escape(opt)}</b> (a put — gains when {sym} falls), or " if opt else "")
                          + f"<b>SHORT {sym}</b> (sell first, intraday only) at about ₹{ltp:,.2f} — {q:,} qty.")
         if index:
             steps.append(f"Exit level: if {sym} reaches <b>₹{stop:,.2f}</b>, get out. Put the stop-loss on the option's "
-                         "premium — the exact price is on the 🎯 Options page.")
+                         "premium — the exact price is on the Options page.")
         else:
             steps.append(f"Straight after, place a <b>stop-loss order at ₹{stop:,.2f}</b>. That caps your loss at about "
                          f"<b>₹{q * abs(ltp - stop):,.0f}</b>.")
-        steps.append(f"<b>SELL to book profit at ₹{target:,.2f}</b> (place it as a target order)." if target else
+        steps.append(f"<b>SELL to book profit at ₹{target:,.2f}</b> — place it as a target order now, so it sells by itself "
+                     f"(+{abs(target - ltp) / ltp * 100:.1f}%, about ₹{q * abs(target - ltp):,.0f})." if target else
                      f"No fixed target — let the profit run. <b>SELL when this signal says SELL</b> ({exit_rule}).")
+        if target and not c.params.intraday:
+            steps.append(f"Before the target is reached, also <b>SELL if this signal turns SELL</b> ({exit_rule}). After the "
+                         "target sells, a new BUY may appear if the trend is still up — that is a fresh trade.")
         if c.trail:
             steps.append("As the price moves your way, <b>raise your stop-loss</b> to the new level shown here (trailing stop).")
         if c.params.intraday:
@@ -827,7 +879,7 @@ def signal(c) -> dict:
     elif res.pending == "EXIT" and t:
         pnl = (ltp / t.entry - 1) * 100 * (1 if t.side == "LONG" else -1)
         out.update(kind="SELL", verdict="SELL (exit)" if t.side == "LONG" else "BUY BACK", color="warn",
-                   msg=f"Exit signal for the {t.side.lower()} taken at ₹{t.entry:,.2f} on {t.entry_time:%d %b %H:%M}.",
+                   msg=f"Exit signal for the {t.side.lower()} taken at ₹{t.entry:,.2f} on {when(t.entry_time, c)}.",
                    steps=[(f"<b>SELL your {sym}</b> (or the call option you bought) now" if t.side == "LONG" else
                            f"<b>Buy back your short {sym}</b> (or SELL the put option you bought) now")
                           + f" — the exit rule triggered. Result ≈ <b>{pnl:+.2f}%</b>.",
@@ -847,16 +899,16 @@ def signal(c) -> dict:
         if c.params.intraday:
             steps.append("Intraday: SELL by 3:15 PM at the latest.")
         steps.append("Didn't buy? <b>Don't chase it now</b> — wait for the next fresh BUY.")
-        plan = [("Entry", f"₹{t.entry:,.2f}", f"{t.entry_time:%d %b}", None),
+        plan = [("Entry", f"₹{t.entry:,.2f}", when(t.entry_time, c), None),
                 ("Result so far", f"{pnl:+.2f}%", "", "up" if pnl > 0 else "down")]
         if has_stop:
-            plan.append(("Stop-loss", f"₹{t.stop:,.2f}", "", "down"))
+            plan.append(("Stop-loss", f"₹{t.stop:,.2f}", f"{(t.stop / ltp - 1) * 100:+.1f}% from here", "down"))
         if has_tgt:
-            plan.append(("Target", f"₹{t.target:,.2f}", "", "up"))
+            plan.append(("Target", f"₹{t.target:,.2f}", f"{(t.target / ltp - 1) * 100:+.1f}% from here", "up"))
         out.update(kind="HOLD", verdict="HOLD" if t.side == "LONG" else "HOLD SHORT", color="up" if t.side == "LONG" else "down",
-                   msg=f"The strategy has been in this {t.side.lower()} since {t.entry_time:%d %b %H:%M}.", steps=steps, plan=plan,
+                   msg=f"The strategy has been in this {t.side.lower()} since {when(t.entry_time, c)}.", steps=steps, plan=plan,
                    stop=t.stop if has_stop else None,
-                   headline=f"Holding since {t.entry_time:%d %b} · {pnl:+.1f}%" + (f" · stop ₹{t.stop:,.0f}" if has_stop else ""))
+                   headline=f"Holding since {when(t.entry_time, c)} · {pnl:+.1f}%" + (f" · stop ₹{t.stop:,.0f}" if has_stop else ""))
     else:
         msg, trig_label, trig = wait_info(c)
         steps = ["<b>Do nothing now</b> — there is no trade setup."]
@@ -882,8 +934,26 @@ def signal(c) -> dict:
     if c.params.intraday and not c.is_open and out["kind"] in ("WAIT", "SKIP"):
         out["headline"] = "Market closed — checked again from 9:15 AM"
     out["note"] = re.sub(r"<[^>]+>", "", out["steps"][0]) if out["steps"] else ""
+    # news & events: a caution next to the tested signal — they never change the verdict (they can't be backtested)
+    nw = getattr(c, "news", None)
+    want = {"BUY": ("results", "bad_news"), "SHORT": ("results",), "HOLD": ("results",)}.get(out["kind"], ())
+    out["cautions"] = [txt for key, txt in (nw["cautions"] if nw else []) if key in want]
+    out["news_tag"] = news_tag(nw, out["kind"])
     out["confidence"] = confidence(c)
     return out
+
+
+def news_tag(nw: dict | None, kind: str = "") -> tuple[str, str] | None:
+    """Short (text, colour key) for cards: a results date that is close, else this week's news reading."""
+    if not nw:
+        return None
+    ev, se = nw["events"], nw["sentiment"]
+    if ev.get("results_in", 99) <= news.RESULTS_SOON_DAYS:
+        n = ev["results_in"]
+        return ("Results " + ("today" if n == 0 else "tomorrow" if n == 1 else f"in {n} days"), "warn")
+    if se["label"] in ("Positive", "Negative", "Mixed"):
+        return f"News: {se['label'].lower()}", se["key"]
+    return None
 
 
 def candle_countdown(c) -> str:

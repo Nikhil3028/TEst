@@ -8,9 +8,11 @@ P = core.prefs()
 
 left, mid, right = st.columns([1, 2.2, 1])
 with mid:
-    st.markdown("<div style='text-align:center;margin-top:10px'><div style='font-size:46px'>📈</div>"
-                "<h1 style='margin:6px 0 4px'>Welcome to Trade Signals</h1>"
-                "<div class='muted' style='font-size:16px'>Clear BUY / SELL signals for the Indian market — tested on years of "
+    import base64
+    mark = base64.b64encode((ui.ASSETS / "mark.svg").read_bytes()).decode()
+    st.markdown(f"<div class='welcome'><img src='data:image/svg+xml;base64,{mark}' alt=''>"
+                "<h1>Welcome to Trade Signals</h1>"
+                "<div class='lead'>Clear BUY / SELL signals for the Indian market — tested on years of "
                 "data, with the exact steps to follow on Groww.</div></div>", unsafe_allow_html=True)
     st.write("")
     st.markdown(ui.grid([
