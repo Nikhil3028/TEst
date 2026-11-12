@@ -331,7 +331,7 @@ def chart_html(c, S, P, height: int = CHART_H) -> str:
     return chart.build_html(df, symbol=c.symbol, intraday=c.intraday_tf, prev_close=c.prev_close, overlays=overlays,
                             default_overlays=default_overlays(c), panes=panes, markers=markers, price_lines=lines,
                             up=UP, down=DOWN, accent=ACCENT, bg="transparent", store_key=f"tsi-{int(c.intraday_tf)}-",
-                            height=height, live=chart_live(c, P),
+                            height=height, live=chart_live(c, P), intra=None if c.intraday_tf else core.intraday_view(c.ticker),
                             alert={"key": c.alert_key, "verdict": S["verdict"], "title": f"{c.symbol}: {S['verdict']}",
                                    "body": S["note"]})
 

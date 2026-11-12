@@ -24,7 +24,7 @@ def _col(x, nd: int = 2) -> list:
 def build_html(df: pd.DataFrame, *, symbol: str, intraday: bool, prev_close: float, overlays: list[dict],
                default_overlays: list[str], panes: list[dict], markers: list[dict], price_lines: list[dict],
                up: str, down: str, accent: str, bg: str, store_key: str, height: int, live: dict | None = None,
-               max_bars: int = MAX_BARS, alert: dict | None = None) -> str:
+               max_bars: int = MAX_BARS, alert: dict | None = None, intra: pd.DataFrame | None = None) -> str:
     """overlays: {name, col, color, style(0 solid/2 dashed), width, step}; panes: {name, lines:[{col,color}], hist:col?, levels:[]}
 
     Data is sent column-wise (one time array + one array per series) and expanded in the browser,
@@ -49,6 +49,14 @@ def build_html(df: pd.DataFrame, *, symbol: str, intraday: bool, prev_close: flo
         "live": live, "alert": alert, "up": up, "down": down, "accent": accent, "bg": bg, "storeKey": store_key, "sessionStart": session_start,
         "periods": ["1D", "1W", "1M", "3M", "All"] if intraday else ["1M", "3M", "6M", "1Y", "3Y", "5Y", "All"],
     }
+    if not intraday and intra is not None and len(intra) >= 10:
+        # a daily chart also carries a few sessions of 5-minute candles: its 1D / 1W buttons switch to them
+        day = intra.index[-1].date()
+        cfg["intra"] = {"t": ((intra.index.asi8 // 10**9) + IST_OFFSET).tolist(), "o": _col(intra.Open), "h": _col(intra.High),
+                        "l": _col(intra.Low), "c": _col(intra.Close),
+                        "v": _col(intra.Volume, 0) if intra.Volume.sum() > 0 else None,
+                        "sessionStart": _t(intra.index[intra.index.date == day][0])}
+        cfg["periods"] = ["1D", "1W"] + cfg["periods"]
     payload = json.dumps(cfg, separators=(",", ":")).replace("</", "<\\/")  # keep user text from closing the <script>
     return TEMPLATE.replace("__H__", str(height)).replace("__CFG__", payload)
 
@@ -118,6 +126,9 @@ const C = __CFG__;
 // expand the column-wise payload: one time array + one value array per series
 C.bars = C.t.map((t, i) => ({ time: t, open: C.o[i], high: C.h[i], low: C.l[i], close: C.c[i] }));
 C.vol = C.v ? C.t.map((t, i) => ({ time: t, value: C.v[i], color: (C.c[i] >= C.o[i] ? C.up : C.down) + '66' })) : [];
+if (C.intra) { const I = C.intra;
+  I.bars = I.t.map((t, i) => ({ time: t, open: I.o[i], high: I.h[i], low: I.l[i], close: I.c[i] }));
+  I.vol = I.v ? I.t.map((t, i) => ({ time: t, value: I.v[i], color: (I.c[i] >= I.o[i] ? C.up : C.down) + '66' })) : []; }
 const _pts = v => C.t.map((t, i) => v[i] == null ? { time: t } : { time: t, value: v[i] });
 C.overlays.forEach(o => { o.data = _pts(o.v); });
 C.panes.forEach(p => {
@@ -144,7 +155,7 @@ const fmt = v => v == null ? '—' : v.toLocaleString('en-IN', {minimumFractionD
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const tfmt = t => { const d = new Date(t * 1000);
   const s = `${String(d.getUTCDate()).padStart(2,'0')} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-  return C.intraday ? `${s}, ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}` : s; };
+  return (C.intraday || view === INTRA) ? `${s}, ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}` : s; };
 
 if (!window.LightweightCharts) { document.getElementById('err').style.display = 'block'; throw new Error('lwc'); }
 const L = LightweightCharts;
@@ -174,6 +185,23 @@ if (C.vol.length) {
 }
 const byTime = new Map(C.bars.map((b, i) => [b.time, i]));
 let last = C.bars[C.bars.length - 1];
+// a daily chart has two data sets: its daily candles, and 5-minute candles shown by the 1D / 1W buttons
+const DAILY = { bars: C.bars, vol: C.vol, last };
+const INTRA = C.intra ? { bars: C.intra.bars, vol: C.intra.vol, last: C.intra.bars[C.intra.bars.length - 1] } : null;
+let view = DAILY;
+const wantsIntra = p => !!INTRA && (p === '1D' || p === '1W');
+function useView(v) {
+  if (v === view) return false;
+  view.last = last; view = v;
+  C.bars = v.bars; last = v.last;
+  byTime.clear(); C.bars.forEach((b, i) => byTime.set(b.time, i));
+  candle.setData(C.bars); area.setData(C.bars.map(b => ({ time: b.time, value: b.close })));
+  if (vol) vol.setData(v.vol);
+  // every series shares one time axis: the daily lines must be emptied, or their years of dates keep the axis daily
+  Object.values(ovSeries).flat().forEach(x => x.s.setData(v === DAILY ? x.data : []));
+  main.timeScale().applyOptions({ timeVisible: C.intraday || v === INTRA });
+  return true;
+}
 
 // overlays
 const ovSeries = {};
@@ -181,7 +209,7 @@ C.overlays.forEach(o => {
   const s = main.addLineSeries({ color: o.color, lineWidth: o.width || 1.5, lineStyle: o.style || 0,
     lineType: o.step ? 1 : 0, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, visible: false });
   s.setData(o.data);
-  (ovSeries[o.name] = ovSeries[o.name] || []).push({ s, color: o.color });
+  (ovSeries[o.name] = ovSeries[o.name] || []).push({ s, color: o.color, data: o.data });
 });
 // trade levels
 const lines = { area: [], candle: [] };
@@ -224,8 +252,8 @@ const state = {
 if (!C.periods.includes(state.period)) state.period = C.periods[C.periods.length - 1];
 
 function periodStart() {
-  if (state.period === 'All') return C.bars[0].time;
-  if (state.period === '1D') return C.sessionStart;
+  if (state.period === 'All' || (view === INTRA && state.period === '1W')) return C.bars[0].time;
+  if (state.period === '1D') return view === INTRA ? C.intra.sessionStart : C.sessionStart;
   const days = { '1W': 7, '1M': 30, '3M': 91, '6M': 182, '1Y': 365, '3Y': 1095, '5Y': 1826 }[state.period];
   return last.time - days * 86400;
 }
@@ -262,26 +290,29 @@ function applyType() {
   applyMarkers();
 }
 function applyMarkers() {
-  const m = state.on.has('Signals') ? C.markers : [];
+  const m = state.on.has('Signals') && view === DAILY ? C.markers : [];
   area.setMarkers(state.type === 'line' ? m : []); candle.setMarkers(state.type === 'candle' ? m : []);
 }
 function applyPeriod() {
   document.querySelectorAll('#periods button').forEach(b => b.classList.toggle('on', b.dataset.p === state.period));
+  if (useView(wantsIntra(state.period) ? INTRA : DAILY)) applyIndicators();
   const n = C.bars.length;
-  if (state.period === 'All') main.timeScale().setVisibleLogicalRange({ from: 0, to: n + 3 });
+  if (state.period === 'All' || (view === INTRA && state.period === '1W')) main.timeScale().setVisibleLogicalRange({ from: 0, to: n + 3 });
   else main.timeScale().setVisibleLogicalRange({ from: baseIndex() - 0.5, to: n + 3 });
   applyType(); header(last.close, null);
 }
 function applyIndicators() {
-  Object.entries(ovSeries).forEach(([name, arr]) => arr.forEach(x => x.s.applyOptions({ visible: state.on.has(name) })));
+  const daily = view === DAILY;   // averages, signals and panels are computed on the daily candles
+  Object.entries(ovSeries).forEach(([name, arr]) => arr.forEach(x => x.s.applyOptions({ visible: daily && state.on.has(name) })));
   if (vol) vol.applyOptions({ visible: state.on.has('Volume') });
-  Object.entries(panes).forEach(([name, p]) => p.div.style.display = state.on.has(name) ? 'block' : 'none');
+  Object.entries(panes).forEach(([name, p]) => p.div.style.display = daily && state.on.has(name) ? 'block' : 'none');
   // only the bottom-most chart shows the time axis
   const shown = Object.values(panes).filter(p => p.div.style.display !== 'none');
   main.timeScale().applyOptions({ visible: shown.length === 0 });
   Object.values(panes).forEach(p => p.ch.timeScale().applyOptions({ visible: p === shown[shown.length - 1] }));
   applyMarkers();
   const lg = document.getElementById('legend'); lg.innerHTML = '';
+  if (!daily) { lg.innerHTML = '<span>5-minute candles · averages and signal markers are shown on the 1M and longer views</span>'; return; }
   Object.entries(ovSeries).forEach(([name, arr]) => { if (state.on.has(name))
     lg.insertAdjacentHTML('beforeend', `<span><i style="background:${arr[0].color}"></i>${name}</span>`); });
   if (state.on.has('Signals') && C.markers.length)
@@ -332,21 +363,28 @@ function setLive(ok, txt) {
 const clock = s => { const d = new Date(s * 1000 + 19800000);
   return [d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()].map(x => String(x).padStart(2, '0')).join(':'); };
 let streaming = false, lastTickAt = 0, feedFails = 0, pollTimer = null, es = null;
-function bucket(t) {  // candle start (shifted seconds) that a tick at time t belongs to
+function bucket(t, ivSec) {  // candle start (shifted seconds) that a tick at time t belongs to
   const day = t - (t % 86400);
-  if (!C.live.ivSec) return day;
+  if (!ivSec) return day;
   const open = day + 9 * 3600 + 15 * 60, close = day + 15 * 3600 + 30 * 60;   // NSE session 09:15–15:30
   t = Math.min(Math.max(t, open), close - 1);   // closing-price ticks after 15:30 belong to the last candle
-  return open + Math.floor((t - open) / C.live.ivSec) * C.live.ivSec;
+  return open + Math.floor((t - open) / ivSec) * ivSec;
+}
+function tickInto(v, px, t) {   // put one price into a data set's last candle (or start a new one); null if it is too old
+  const l = v.bars[v.bars.length - 1], bt = bucket(t, v === INTRA ? 300 : C.live.ivSec);
+  if (bt < l.time) return null;
+  let b;
+  if (bt > l.time) { b = { time: bt, open: px, high: px, low: px, close: px }; v.bars.push(b); }
+  else { b = { ...l, close: px, high: Math.max(l.high, px), low: Math.min(l.low, px) }; v.bars[v.bars.length - 1] = b; }
+  v.last = b;
+  return b;
 }
 function applyTick(px, t) {
-  const bt = bucket(t);
-  if (bt < last.time) return;
-  let b;
-  if (bt > last.time) { b = { time: bt, open: px, high: px, low: px, close: px };
-                        C.bars.push(b); byTime.set(bt, C.bars.length - 1); }
-  else { b = { ...last, close: px, high: Math.max(last.high, px), low: Math.min(last.low, px) };
-         C.bars[C.bars.length - 1] = b; }
+  const other = view === DAILY ? INTRA : DAILY;
+  if (other) tickInto(other, px, t);          // the hidden data set stays current too
+  const b = tickInto(view, px, t);
+  if (!b) return;
+  byTime.set(b.time, C.bars.length - 1);
   last = b;
   candle.update(b); area.update({ time: b.time, value: b.close });
   if (!hovering) header(px, null);
@@ -379,6 +417,12 @@ async function poll() {
     const r = await fetch(feedUrl(C.live.url), { cache: 'no-store', signal: ctl.signal });
     const j = await r.json();
     if (!j.bars) throw new Error(j.error || 'no data');
+    if (view !== DAILY) {   // 5-minute view of a daily chart: the feed's candles are daily ones, so only its newest price is used
+      const nb = j.bars[j.bars.length - 1], nowT = Math.floor(Date.now() / 1000) + 19800;
+      if (j.tick) applyTick(j.tick.ltp, j.tick.t); else if (!streaming && nb) applyTick(nb.close, nowT);
+      if (!streaming) setLive(true, `LIVE · ${clock(j.ts)}`);
+      feedFails = 0; return;
+    }
     let changed = false;
     for (const b0 of j.bars) {
       let b = b0;

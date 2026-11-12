@@ -343,6 +343,12 @@ def prefetch_news(symbols: list[str]):
         list(ex.map(one, symbols))
 
 
+@st.cache_data(ttl=120, max_entries=40, show_spinner=False)
+def intraday_view(ticker):
+    """Five sessions of 5-minute candles — what the 1D / 1W buttons of a daily chart show."""
+    return data.fetch(ticker, "5m", "5d", retries=0)
+
+
 def quote(ticker):
     """(last price, % change vs previous close) or None — live ticks from Angel One when connected."""
     a = ANGEL()
