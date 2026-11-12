@@ -24,6 +24,15 @@ def run_every(P) -> int | None:
     return P.refresh if P.live and core.market()[0] else None
 
 
+def price_every(P, floor: int = 1, slow: int | None = None) -> int | None:
+    """Refresh period for sections that only re-read prices. With a broker tick stream the prices are already in
+    memory, so they can be redrawn every `floor` seconds; without one each refresh is a download, so `slow`
+    (default: the chosen refresh time) is used. None while the market is closed or live updates are off."""
+    if not (P.live and core.market()[0]):
+        return None
+    return floor if core.ANGEL() else max(slow or P.refresh, floor)
+
+
 def open_chart(symbol: str):
     core.select(symbol)
     st.switch_page("views/chart_page.py")
@@ -98,16 +107,24 @@ def conf_badge(level: str, key: str) -> str:
 
 
 def signal_card_html(c, S, P, *, countdown: str = "", compact: bool = False) -> str:
+    """The signal as a trade ticket: verdict, the stop → entry → target bar, the remaining numbers, the steps."""
     col = ui.color(S["color"])
     lvl, ckey, why = S["confidence"]
-    plan = ui.grid([ui.tile(lab, val, sub, ui.color(k)) for lab, val, sub, k in S["plan"]]) if S["plan"] else ""
+    ticket = ""
+    stop = S.get("stop") or S.get("ticket_stop")
+    if S["kind"] in ("BUY", "SHORT", "HOLD") and stop and S.get("target") and S.get("entry"):
+        ticket = ui.rr_bar(stop, S["entry"], S["target"], c.ltp,
+                           "Stop-loss" if S.get("stop") and c.sl_atr else "Emergency stop")
+    in_ticket = ("Entry", "Stop-loss", "Emergency stop", "Target")
+    tiles = [x for x in S["plan"] if not (ticket and x[0].rstrip(" ≈") in in_ticket)]
+    plan = ui.grid([ui.tile(lab, val, sub, ui.color(k)) for lab, val, sub, k in tiles]) if tiles else ""
     steps = ("<div class='steps'><div class='l'>What to do now</div><ol>"
              + "".join(f"<li>{x}</li>" for x in S["steps"]) + "</ol></div>") if S["steps"] else ""
     strat_line = ("Auto picked " if c.auto_mode else "Strategy: ") + f"<b>{ui.esc(c.strat_name)}</b>"
     return (f"<div class='card sigpanel' style='--sig:{col}'>"
             f"<div class='head'><h4>Signal now</h4>{conf_badge(lvl, ckey)}</div>"
             f"<div class='verdict' style='color:{col}'>{ui.esc(S['verdict'])}</div>"
-            f"<div class='msg' style='margin-top:4px'>{S['msg']}</div>{plan}"
+            f"<div class='msg' style='margin-top:4px'>{S['msg']}</div>{ticket}{plan}"
             + "".join(ui.callout(x) for x in S.get("cautions", []))
             + steps
             + f"<div class='meta'>{strat_line} · {ui.esc(why)}"

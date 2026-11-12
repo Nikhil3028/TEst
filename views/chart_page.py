@@ -6,7 +6,7 @@ import journal
 import options
 import ui
 from views import common
-from views.common import CHART_H, run_every
+from views.common import CHART_H, price_every, run_every
 
 P = core.prefs()
 sel = core.selection()
@@ -34,7 +34,7 @@ with cols[-1]:
 c, S = None, None
 
 
-def compute():
+def compute(feed: bool = True):
     """Analysis (cached per candle) + live price -> the signal. Called by every live section."""
     global c, S
     with st.spinner(f"Analysing {sel.symbol}…"):
@@ -43,16 +43,17 @@ def compute():
         st.error(f"No price data for **{sel.symbol}**. Check the symbol — use the NSE name, e.g. TATAPOWER.")
         st.stop()
     S = core.signal(c)
-    common.chart_live(c, P)   # keeps the chart's live updates flowing when opened online
+    if feed:
+        common.chart_live(c, P)   # keeps the chart's live updates flowing when opened online
 
 
 compute()
 
 
 # ---------------------------------------------------------------- header (refreshes itself)
-@st.fragment(run_every=RUN)
+@st.fragment(run_every=price_every(P))
 def header():
-    compute()
+    compute(feed=False)
     today = c.today
     day_hi = max(float(c.raw["High"][today].max()), c.ltp)
     day_lo = min(float(c.raw["Low"][today].min()), c.ltp)

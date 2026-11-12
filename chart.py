@@ -57,12 +57,12 @@ TEMPLATE = r"""<!doctype html><html><head><meta charset="utf-8">
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   * { box-sizing: border-box; }
-  :root { --fg:#e7e9ee; --muted:#8a90a0; --btn:#b4b9c6; --hover:#181c24; --hover-fg:#fff; --line:#232834;
-          --menu:#12151b; --menu-line:#2e3442; --menu-fg:#d6d9e0; --pane:#181c24; }
+  :root { --fg:#eceef3; --muted:#8b93a7; --btn:#b4b9c6; --hover:#151922; --hover-fg:#fff; --line:#1e2330;
+          --menu:#0e1117; --menu-line:#2c3345; --menu-fg:#d6d9e0; --pane:#151922; }
   :root.light { --fg:#141821; --muted:#626a7a; --btn:#4b5363; --hover:#f0f2f5; --hover-fg:#111; --line:#e3e6eb;
           --menu:#ffffff; --menu-line:#e3e6eb; --menu-fg:#141821; --pane:#f0f2f5; }
   html, body { margin:0; padding:0; background: transparent; color:var(--fg); height:__H__px; overflow:hidden;
-    font-family: Inter, "Source Sans Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    font-family: Geist, Inter, "Source Sans Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   #wrap { display:flex; flex-direction:column; height:100%; }
   #head { display:flex; justify-content:space-between; align-items:flex-end; padding:2px 4px 8px; gap:12px; flex-wrap:wrap; }
   #px { font-size:28px; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:-.01em; }

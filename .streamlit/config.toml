@@ -1,22 +1,23 @@
 [theme]
-primaryColor = "#4c84f5"
-font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap, sans-serif"
-baseRadius = "0.6rem"
+primaryColor = "#6d8cff"
+font = "Geist:https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap, Inter, sans-serif"
+codeFont = "Geist Mono:https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&display=swap, monospace"
+baseRadius = "0.65rem"
 showWidgetBorder = true
 
 [theme.light]
-primaryColor = "#2f6be0"
-backgroundColor = "#f5f6f8"
+primaryColor = "#3b5bdb"
+backgroundColor = "#f4f5f8"
 secondaryBackgroundColor = "#ffffff"
-textColor = "#141821"
-borderColor = "#e3e6eb"
+textColor = "#0f1320"
+borderColor = "#e4e7ee"
 
 [theme.dark]
-primaryColor = "#6b9bff"
-backgroundColor = "#0b0d11"
-secondaryBackgroundColor = "#12151b"
-textColor = "#e7e9ee"
-borderColor = "#232834"
+primaryColor = "#7c9cff"
+backgroundColor = "#07090d"
+secondaryBackgroundColor = "#0e1117"
+textColor = "#eceef3"
+borderColor = "#1e2330"
 
 [client]
 toolbarMode = "viewer"

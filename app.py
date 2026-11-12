@@ -10,7 +10,7 @@ import streamlit as st
 import core
 import data
 import ui
-from views.common import run_every
+from views.common import price_every
 
 st.set_page_config(page_title="Trade Signals", page_icon=str(ui.ASSETS / "mark.svg"), layout="wide",
                    initial_sidebar_state="collapsed")
@@ -36,9 +36,14 @@ PAGES = [
 ]
 
 
-@st.fragment(run_every=run_every(P))
+st.session_state["_mkt_open"] = core.market()[0]
+
+
+@st.fragment(run_every=price_every(P) or (30 if P.live else None))   # closed: only watching for the opening bell
 def market_strip():
     is_open, status = core.market()
+    if is_open != st.session_state.get("_mkt_open"):   # the market just opened / closed: every section restarts at its new pace
+        st.rerun()
     quotes = []
     for name in ("NIFTY 50", "BANK NIFTY", "SENSEX", "NIFTY FIN SERVICE", "NIFTY IT"):
         if (q := core.quote(data.INDICES[name])):

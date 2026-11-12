@@ -907,7 +907,9 @@ def signal(c) -> dict:
             plan.append(("Target", f"₹{t.target:,.2f}", f"{(t.target / ltp - 1) * 100:+.1f}% from here", "up"))
         out.update(kind="HOLD", verdict="HOLD" if t.side == "LONG" else "HOLD SHORT", color="up" if t.side == "LONG" else "down",
                    msg=f"The strategy has been in this {t.side.lower()} since {when(t.entry_time, c)}.", steps=steps, plan=plan,
-                   stop=t.stop if has_stop else None,
+                   stop=t.stop if has_stop else None, entry=t.entry, target=t.target if has_tgt else None,
+                   # no stop in the strategy itself: the ticket shows the emergency stop a BUY tells you to place (2 typical moves)
+                   ticket_stop=None if has_stop else t.entry - (1 if t.side == "LONG" else -1) * 2.0 * atr_v,
                    headline=f"Holding since {when(t.entry_time, c)} · {pnl:+.1f}%" + (f" · stop ₹{t.stop:,.0f}" if has_stop else ""))
     else:
         msg, trig_label, trig = wait_info(c)
